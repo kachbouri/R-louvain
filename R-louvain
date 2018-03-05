@@ -1,0 +1,39 @@
+suppressMessages({
+  library(quantmod)
+  library(igraph)
+  library(threejs)
+  library(crosstalk)
+  library(htmltools)
+  # using an experimental extension to crosstalk:
+  library(crosstool) # devtools::install_github('bwlewis/crosstool')
+})
+suppressMessages(load(url("http://illposed.net/logreturns.rdata")))
+X = cor(log_returns)
+L = eigen(X, symmetric=TRUE)
+N = 10
+P = L$vectors[, 1:N] %*% ((1 / L$values[1:N]) * t(L$vectors[, 1:N]))
+P = P / tcrossprod(sqrt(diag(P)))
+colnames(P) = colnames(X)
+suppressMessages(library(igraph))
+
+threshold = 0.90 # thresholded precision matrix max 0.99 (not recommended)
+Q = P * (P > quantile(P, probs=threshold))                           # thresholded precision matrix
+g = graph.adjacency(Q, mode="undirected", weighted=TRUE, diag=FALSE) # ...expressed as a graph
+
+# The rest of the code lumps any singletons lacking edges into a single 'unassociated' group shown in gray
+# (also assigning distinct colors to the other groups).
+x = groups(cluster_louvain(g))
+i = unlist(lapply(x, length))
+d = order(i, decreasing=TRUE)
+x = x[d]
+i = i[d]
+j = i > 1
+s = sum(j)
+names(x)[j] = seq(1, s)
+names(x)[! j] = s + 1
+grp = as.integer(rep(names(x), i))
+clrs = c(rainbow(s), "gray")[grp[order(unlist(x))]]
+g = set_vertex_attr(g, "color", value=clrs)
+library(threejs)
+graphjs(g, vertex.size=0.2, vertex.shape=colnames(X), edge.alpha=0.5)
+
